@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>🎤 カラオケ部屋管理</title>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d1a;
+    --surface: #1a1a2e;
+    --surface2: #16213e;
+    --accent: #e040fb;
+    --accent2: #ff6b6b;
+    --accent3: #ffd166;
+    --accent4: #06d6a0;
+    --text: #f0e6ff;
+    --text2: #a89bc2;
+    --card: #1e1e35;
+    --border: rgba(224,64,251,0.25);
+    --glow: 0 0 20px rgba(224,64,251,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 80px;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed; top: -200px; left: -200px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(224,64,251,0.1) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed; bottom: -150px; right: -150px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(6,214,160,0.08) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(13,13,26,0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .logo {
+    font-family: 'Dela Gothic One', sans-serif;
+    font-size: 1.2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+  }
+  .header-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* Sync indicator */
+  .sync-badge {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 0.68rem; font-weight: 700;
+    padding: 4px 9px; border-radius: 20px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text2);
+    transition: all 0.4s;
+  }
+  .sync-badge.online { color: var(--accent4); border-color: rgba(6,214,160,0.35); background: rgba(6,214,160,0.08); }
+  .sync-badge.syncing { color: var(--accent3); border-color: rgba(255,209,102,0.35); background: rgba(255,209,102,0.08); }
+  .sync-badge.offline { color: var(--accent2); border-color: rgba(255,107,107,0.35); background: rgba(255,107,107,0.08); }
+  .sync-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  .sync-badge.online .sync-dot { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+  .tabs {
+    display: flex; padding: 12px 16px 0; gap: 8px;
+    position: relative; z-index: 1;
+  }
+  .tab {
+    flex: 1; padding: 10px;
+    border: 1px solid var(--border); border-radius: 12px 12px 0 0;
+    background: var(--surface2); color: var(--text2);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 0.8rem; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; text-align: center;
+  }
+  .tab.active { background: var(--card); color: var(--accent); border-color: var(--accent); border-bottom-color: var(--card); }
+
+  .page { display: none; padding: 0 12px; position: relative; z-index: 1; }
+  .page.active { display: block; }
+
+  @media (min-width: 768px) {
+    body { padding-bottom: 0; }
+    .tabs { display: none; }
+    .bottom-nav { display: none !important; }
+    .page { display: block !important; padding: 0; }
+    #page-people { display: none !important; }
+    .app-layout {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      min-height: calc(100vh - 57px);
+    }
+    .sidebar {
+      background: var(--surface2);
+      border-right: 1px solid var(--border);
+      padding: 18px 14px;
+      overflow-y: auto;
+      position: sticky; top: 57px;
+      height: calc(100vh - 57px);
+    }
+    .main-content { padding: 18px; overflow-y: auto; }
+    .rooms-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 14px;
+    }
+    .room-card { min-height: 150px; }
+  }
+
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 4px 8px;
+  }
+  .section-title {
+    font-family: 'Dela Gothic One', sans-serif;
+    font-size: 0.9rem; color: var(--text2); letter-spacing: 1px;
+  }
+
+  .rooms-grid { display: flex; flex-direction: column; gap: 12px; }
+
+  .room-card {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+  }
+  .room-card.drag-over {
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+    transform: scale(1.01);
+  }
+  .room-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .room-name {
+    font-family: 'Dela Gothic One', sans-serif;
+    font-size: 1rem; display: flex; align-items: center; gap: 8px;
+  }
+  .room-count {
+    font-size: 0.72rem; font-weight: 700; color: var(--text2);
+    background: rgba(255,255,255,0.08); padding: 3px 8px; border-radius: 20px;
+  }
+  .room-members {
+    padding: 10px 12px 12px;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    min-height: 52px;
+    transition: background 0.15s;
+  }
+  .room-members.drop-active { background: rgba(224,64,251,0.07); border-radius: 0 0 14px 14px; }
+  .empty-room { color: var(--text2); font-size: 0.78rem; opacity: 0.5; align-self: center; }
+
+  .member-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px; padding: 5px 10px 5px 5px;
+    font-size: 0.82rem; font-weight: 700;
+    cursor: grab; user-select: none; -webkit-user-select: none;
+    transition: background 0.15s, opacity 0.15s;
+    touch-action: none;
+  }
+  .member-chip:hover { background: rgba(255,255,255,0.14); }
+  .member-chip.is-dragging { opacity: 0.35; cursor: grabbing; }
+
+  .drag-ghost {
+    position: fixed; pointer-events: none; z-index: 9999;
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 20px; padding: 5px 12px 5px 5px;
+    font-size: 0.82rem; font-weight: 700;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    background: var(--card);
+    border: 2px solid var(--accent);
+    box-shadow: 0 10px 36px rgba(224,64,251,0.45);
+    color: var(--text);
+    transform: rotate(2.5deg) scale(1.06);
+  }
+  .member-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 800; flex-shrink: 0;
+  }
+  .avatar-sm {
+    width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 0.9rem; flex-shrink: 0;
+  }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 8px 14px; border-radius: 10px; border: none;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700; font-size: 0.82rem;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn:active { transform: scale(0.95); opacity: 0.85; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), #9b27af); color: white; box-shadow: var(--glow); }
+  .btn-sm { padding: 6px 10px; font-size: 0.74rem; border-radius: 9px; }
+  .btn-ghost { background: rgba(255,255,255,0.07); color: var(--text2); border: 1px solid rgba(255,255,255,0.1); }
+  .btn-danger { background: rgba(255,107,107,0.13); color: var(--accent2); border: 1px solid rgba(255,107,107,0.28); }
+
+  .sidebar-section-title {
+    font-family: 'Dela Gothic One', sans-serif;
+    font-size: 0.72rem; color: var(--text2);
+    letter-spacing: 2px; margin-bottom: 8px;
+  }
+  .sidebar-hint {
+    font-size: 0.7rem; color: var(--text2); opacity: 0.6;
+    margin-bottom: 10px;
+  }
+  .sidebar-people { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+  .sidebar-person {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 11px; padding: 8px 11px;
+    cursor: grab; transition: all 0.15s; touch-action: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  .sidebar-person:hover { border-color: rgba(224,64,251,0.5); }
+  .sidebar-person.is-dragging { opacity: 0.35; cursor: grabbing; }
+  .sidebar-person-name { font-weight: 800; font-size: 0.85rem; }
+  .sidebar-person-room { font-size: 0.68rem; color: var(--text2); margin-top: 1px; }
+
+  .people-list { display: flex; flex-direction: column; gap: 10px; }
+  .person-row {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .person-info { flex: 1; min-width: 0; }
+  .person-name { font-weight: 800; font-size: 0.95rem; }
+  .person-location { font-size: 0.75rem; color: var(--text2); margin-top: 2px; }
+  .person-actions { display: flex; gap: 6px; }
+
+  .stats-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .stat-card { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; text-align: center; }
+  .stat-num { font-family: 'Dela Gothic One', sans-serif; font-size: 1.8rem; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+  .stat-label { font-size: 0.7rem; color: var(--text2); margin-top: 4px; font-weight: 700; }
+
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72); backdrop-filter: blur(8px);
+    z-index: 500; display: none; align-items: flex-end; justify-content: center;
+  }
+  @media (min-width: 768px) {
+    .modal-overlay { align-items: center; }
+    .modal { border-radius: 20px !important; max-width: 400px; margin: 0 auto; border-bottom: 1px solid var(--border) !important; }
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 24px 24px 0 0;
+    border: 1px solid var(--border); border-bottom: none;
+    padding: 20px 18px 36px; width: 100%;
+    animation: slideUp 0.22s ease;
+    max-height: 85vh; overflow-y: auto;
+  }
+  @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  .modal-handle { width: 40px; height: 4px; background: rgba(255,255,255,0.18); border-radius: 2px; margin: 0 auto 16px; }
+  .modal-title { font-family: 'Dela Gothic One', sans-serif; font-size: 1.05rem; margin-bottom: 16px; background: linear-gradient(135deg, var(--accent), var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .input-group { margin-bottom: 12px; }
+  .input-label { font-size: 0.75rem; font-weight: 700; color: var(--text2); margin-bottom: 5px; display: block; }
+  .input { width: 100%; background: rgba(255,255,255,0.06); border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; color: var(--text); font-family: 'M PLUS Rounded 1c', sans-serif; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+  .input:focus { border-color: var(--accent); }
+  select.input { appearance: none; }
+  .color-picker { display: flex; gap: 7px; flex-wrap: wrap; }
+  .color-dot { width: 28px; height: 28px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform 0.15s, border-color 0.15s; }
+  .color-dot.selected { border-color: white; transform: scale(1.2); }
+  .icon-picker { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icon-dot { width: 34px; height: 34px; border-radius: 9px; cursor: pointer; background: rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; border: 2px solid transparent; transition: all 0.15s; }
+  .icon-dot.selected { border-color: var(--accent); background: rgba(224,64,251,0.15); }
+  .room-select-list { display: flex; flex-direction: column; gap: 7px; max-height: 44vh; overflow-y: auto; }
+  .room-option { background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 11px; padding: 11px 13px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; transition: all 0.15s; font-weight: 700; font-size: 0.9rem; }
+  .room-option:active { background: rgba(224,64,251,0.13); }
+  .room-option.current { border-color: var(--accent); color: var(--accent); }
+  .move-member-info { display: flex; align-items: center; gap: 12px; padding: 0 4px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 12px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; justify-content: center; }
+
+  /* Loading screen */
+  #loading {
+    position: fixed; inset: 0; z-index: 2000;
+    background: var(--bg);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  }
+  .loading-logo {
+    font-family: 'Dela Gothic One', sans-serif;
+    font-size: 2rem;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .loading-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(224,64,251,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 0.8rem; color: var(--text2); }
+
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 9px 18px; font-size: 0.83rem; font-weight: 700; color: var(--text);
+    z-index: 1000; opacity: 0; transition: all 0.28s; pointer-events: none;
+    white-space: nowrap; box-shadow: var(--glow);
+  }
+  @media (min-width: 768px) { .toast { bottom: 24px; } }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(13,13,26,0.95); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    display: flex; z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    padding: 10px 4px; cursor: pointer; transition: color 0.15s;
+    color: var(--text2); font-size: 0.68rem; font-weight: 700; gap: 3px;
+  }
+  .nav-item .nav-icon { font-size: 1.35rem; }
+  .nav-item.active { color: var(--accent); }
+
+  .sidebar-stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.8rem; padding: 7px 9px;
+    background: var(--card); border-radius: 8px; margin-bottom: 5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="loading-logo">🎤 カラオケ</div>
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Firebaseに接続中...</div>
+</div>
+
+<header>
+  <div class="logo">🎤 カラオケ</div>
+  <div class="header-actions">
+    <div class="sync-badge" id="sync-badge">
+      <div class="sync-dot"></div>
+      <span id="sync-label">接続中</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="openAddRoom()">＋ 部屋</button>
+    <button class="btn btn-primary btn-sm" onclick="openAddPerson()">＋ 人</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('rooms')">🚪 部屋別</div>
+  <div class="tab" onclick="showTab('people')">👤 メンバー</div>
+</div>
+
+<div id="page-rooms" class="page active">
+  <div class="app-layout">
+    <div class="sidebar" id="pc-sidebar">
+      <div class="sidebar-section-title">MEMBERS</div>
+      <div class="sidebar-hint">🖱️ ドラッグで部屋へ移動</div>
+      <div class="sidebar-people" id="sidebar-people"></div>
+      <div class="sidebar-section-title" style="margin-top:4px;">STATS</div>
+      <div id="sidebar-stats"></div>
+    </div>
+    <div class="main-content">
+      <div class="section-header" style="padding-top:8px;">
+        <div class="section-title">ROOMS</div>
+        <div id="unassigned-info" style="font-size:0.76rem;color:var(--accent2);"></div>
+      </div>
+      <div class="rooms-grid" id="rooms-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="page-people" class="page">
+  <div class="section-header"><div class="section-title">MEMBERS</div></div>
+  <div class="stats-row" id="stats-row"></div>
+  <div class="people-list" id="people-list"></div>
+</div>
+
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-rooms" onclick="showTab('rooms')"><span class="nav-icon">🚪</span>部屋別</div>
+  <div class="nav-item" id="nav-people" onclick="showTab('people')"><span class="nav-icon">👤</span>メンバー</div>
+</div>
+
+<!-- モーダル: 部屋追加 -->
+<div class="modal-overlay" id="modal-add-room">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🚪 部屋を追加</div>
+    <div class="input-group">
+      <label class="input-label">部屋名</label>
+      <input class="input" id="new-room-name" placeholder="例: 部屋A、201号室..." />
+    </div>
+    <div class="input-group">
+      <label class="input-label">アイコン</label>
+      <div class="icon-picker" id="icon-picker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-room')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addRoom()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: 人追加 -->
+<div class="modal-overlay" id="modal-add-person">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">👤 メンバーを追加</div>
+    <div class="input-group">
+      <label class="input-label">名前</label>
+      <input class="input" id="new-person-name" placeholder="名前を入力..." />
+    </div>
+    <div class="input-group">
+      <label class="input-label">アバターカラー</label>
+      <div class="color-picker" id="color-picker"></div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">最初の部屋</label>
+      <select class="input" id="new-person-room"><option value="">未割当</option></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-person')">キャンセル</button>
+      <button class="btn btn-primary" onclick="addPerson()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<!-- モーダル: 移動 -->
+<div class="modal-overlay" id="modal-move">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🚪 部屋を移動</div>
+    <div class="move-member-info" id="move-member-info"></div>
+    <div class="room-select-list" id="room-select-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('modal-move')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, push, remove, update }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ============================================================
+// FIREBASE INIT
+// ============================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyDAeNMRzU7_cg2iolFpp1hR-YvTvQ1Q4o4",
+  authDomain: "karaoke-test-0323.firebaseapp.com",
+  databaseURL: "https://karaoke-test-0323-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "karaoke-test-0323",
+  storageBucket: "karaoke-test-0323.firebasestorage.app",
+  messagingSenderId: "247352221622",
+  appId: "1:247352221622:web:169946cdedb81f07b22b17"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// ============================================================
+// CONSTANTS
+// ============================================================
+const COLORS = [
+  {bg:'#e040fb',text:'#fff'},{bg:'#ff6b6b',text:'#fff'},{bg:'#ffd166',text:'#222'},
+  {bg:'#06d6a0',text:'#222'},{bg:'#4cc9f0',text:'#222'},{bg:'#f77f00',text:'#fff'},
+  {bg:'#8338ec',text:'#fff'},{bg:'#3a86ff',text:'#fff'},{bg:'#fb5607',text:'#fff'},{bg:'#e63946',text:'#fff'},
+];
+const ICONS = ['🎤','🎵','🎶','🎸','🎺','🎹','⭐','🔥','💎','🎉'];
+
+// ============================================================
+// LOCAL STATE (mirror of Firebase)
+// ============================================================
+let rooms = {};   // { firebaseKey: {name, icon} }
+let people = {};  // { firebaseKey: {name, roomId|null, colorIdx} }
+let selColor = 0, selIcon = '🎤', movingPersonId = null;
+let initialized = false;
+
+// ============================================================
+// FIREBASE LISTENERS
+// ============================================================
+onValue(ref(db, 'rooms'), snap => {
+  rooms = snap.val() || {};
+  if (initialized) render();
+});
+
+onValue(ref(db, 'people'), snap => {
+  people = snap.val() || {};
+  if (!initialized) {
+    // First load: seed sample data if empty
+    if (Object.keys(rooms).length === 0 && Object.keys(people).length === 0) {
+      seedData();
+    } else {
+      initialized = true;
+      hideLoading();
+      render();
+    }
+  } else {
+    render();
+  }
+});
+
+// Connection state
+onValue(ref(db, '.info/connected'), snap => {
+  const connected = snap.val();
+  const badge = document.getElementById('sync-badge');
+  const label = document.getElementById('sync-label');
+  if (connected) {
+    badge.className = 'sync-badge online';
+    label.textContent = 'リアルタイム同期中';
+  } else {
+    badge.className = 'sync-badge offline';
+    label.textContent = 'オフライン';
+  }
+});
+
+function hideLoading() {
+  const el = document.getElementById('loading');
+  el.style.opacity = '0';
+  el.style.transition = 'opacity 0.4s';
+  setTimeout(() => el.remove(), 400);
+}
+
+async function seedData() {
+  // Push default rooms
+  const r1 = await push(ref(db, 'rooms'), {name:'部屋A', icon:'🎤'});
+  const r2 = await push(ref(db, 'rooms'), {name:'部屋B', icon:'🎵'});
+  const r3 = await push(ref(db, 'rooms'), {name:'部屋C', icon:'🎶'});
+  await push(ref(db, 'people'), {name:'田中', roomId: r1.key, colorIdx:0});
+  await push(ref(db, 'people'), {name:'鈴木', roomId: r1.key, colorIdx:1});
+  await push(ref(db, 'people'), {name:'佐藤', roomId: r2.key, colorIdx:2});
+  await push(ref(db, 'people'), {name:'山田', roomId: r2.key, colorIdx:3});
+  await push(ref(db, 'people'), {name:'中村', roomId: r3.key, colorIdx:4});
+  await push(ref(db, 'people'), {name:'小林', roomId: null,   colorIdx:5});
+  initialized = true;
+  hideLoading();
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const gc = i => COLORS[i % COLORS.length];
+const gi = n => n ? n[0] : '?';
+const roomsArr = () => Object.entries(rooms).map(([k,v]) => ({key:k,...v}));
+const peopleArr = () => Object.entries(people).map(([k,v]) => ({key:k,...v}));
+const grb = key => rooms[key] ? {key,...rooms[key]} : null;
+const gpr = roomKey => peopleArr().filter(p => p.roomId === roomKey);
+const gun = () => peopleArr().filter(p => !p.roomId);
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  renderRooms();
+  renderSidebar();
+  renderMobile();
+  updateRoomSelect();
+}
+window.render = render;
+
+function renderRooms() {
+  const grid = document.getElementById('rooms-grid');
+  const un = gun();
+  document.getElementById('unassigned-info').textContent = un.length > 0 ? `⚠️ 未割当 ${un.length}人` : '';
+
+  let html = '';
+  if (un.length > 0) html += roomCardHTML(null, '⚠️', '未割当', un, 'rgba(255,107,107,0.35)');
+  roomsArr().forEach(r => html += roomCardHTML(r.key, r.icon, r.name, gpr(r.key), null));
+  grid.innerHTML = html;
+  bindDrop();
+  bindChips();
+}
+
+function roomCardHTML(key, icon, name, members, borderColor) {
+  const style = borderColor ? `style="border-color:${borderColor}"` : '';
+  const dropKey = key === null ? 'null' : key;
+  const membersHTML = members.length === 0
+    ? '<span class="empty-room">ここへドロップ</span>'
+    : members.map(p => chipHTML(p)).join('');
+  const deleteBtn = key !== null
+    ? `<button class="btn btn-danger btn-sm" onclick="deleteRoom('${key}')">削除</button>`
+    : '';
+  return `<div class="room-card" data-room-key="${dropKey}" ${style}>
+    <div class="room-header">
+      <div class="room-name"><span>${icon}</span>${name}</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="room-count">${members.length}人</div>${deleteBtn}
+      </div>
+    </div>
+    <div class="room-members" data-drop="${dropKey}">${membersHTML}</div>
+  </div>`;
+}
+
+function chipHTML(p) {
+  const c = gc(p.colorIdx);
+  return `<div class="member-chip" data-pid="${p.key}" onclick="openMove('${p.key}')">
+    <div class="member-avatar" style="background:${c.bg};color:${c.text}">${gi(p.name)}</div>${p.name}
+  </div>`;
+}
+
+function renderSidebar() {
+  const el = document.getElementById('sidebar-people');
+  el.innerHTML = peopleArr().map(p => {
+    const c = gc(p.colorIdx);
+    const room = grb(p.roomId);
+    return `<div class="sidebar-person" data-pid="${p.key}" onclick="openMove('${p.key}')">
+      <div class="avatar-sm" style="background:${c.bg};color:${c.text}">${gi(p.name)}</div>
+      <div>
+        <div class="sidebar-person-name">${p.name}</div>
+        <div class="sidebar-person-room">${room ? room.icon+' '+room.name : '⚠️ 未割当'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const un = gun();
+  document.getElementById('sidebar-stats').innerHTML = [
+    ['部屋数', roomsArr().length, false],
+    ['総人数', peopleArr().length, false],
+    ['未割当', un.length, un.length > 0],
+  ].map(([label, val, warn]) =>
+    `<div class="sidebar-stat-row">
+      <span style="color:${warn?'var(--accent2)':'var(--text2)'}">${label}</span>
+      <span style="font-weight:800;color:${warn?'var(--accent2)':'var(--text)'}">${val}</span>
+    </div>`
+  ).join('');
+
+  bindSidebarDrag();
+}
+
+function renderMobile() {
+  const list = document.getElementById('people-list');
+  list.innerHTML = peopleArr().map(p => {
+    const c = gc(p.colorIdx); const room = grb(p.roomId);
+    return `<div class="person-row">
+      <div class="avatar-sm" style="background:${c.bg};color:${c.text}">${gi(p.name)}</div>
+      <div class="person-info">
+        <div class="person-name">${p.name}</div>
+        <div class="person-location">${room ? room.icon+' '+room.name : '⚠️ 未割当'}</div>
+      </div>
+      <div class="person-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openMove('${p.key}')">移動</button>
+        <button class="btn btn-danger btn-sm" onclick="deletePerson('${p.key}')">削除</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const un = gun();
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${roomsArr().length}</div><div class="stat-label">部屋数</div></div>
+    <div class="stat-card"><div class="stat-num">${peopleArr().length}</div><div class="stat-label">総人数</div></div>
+    <div class="stat-card"><div class="stat-num">${un.length}</div><div class="stat-label">未割当</div></div>`;
+}
+
+function updateRoomSelect() {
+  document.getElementById('new-person-room').innerHTML =
+    '<option value="">未割当</option>' +
+    roomsArr().map(r => `<option value="${r.key}">${r.icon} ${r.name}</option>`).join('');
+}
+
+// ============================================================
+// DRAG & DROP
+// ============================================================
+let dragPid = null;
+let ghostEl = null;
+
+function bindChips() {
+  document.querySelectorAll('.member-chip').forEach(chip => {
+    chip.addEventListener('mousedown', startDrag);
+    chip.addEventListener('touchstart', startTouchDrag, {passive:false});
+  });
+}
+function bindSidebarDrag() {
+  document.querySelectorAll('.sidebar-person').forEach(el => {
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('touchstart', startTouchDrag, {passive:false});
+  });
+}
+function bindDrop() {
+  document.querySelectorAll('[data-drop]').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); activateDrop(zone); });
+    zone.addEventListener('dragleave', () => deactivateDrop(zone));
+    zone.addEventListener('drop', e => { e.preventDefault(); deactivateDrop(zone); doMove(zone.dataset.drop); });
+  });
+}
+
+function startDrag(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  dragPid = e.currentTarget.dataset.pid;
+  spawnGhost(e.clientX, e.clientY);
+  e.currentTarget.classList.add('is-dragging');
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+}
+function onMouseMove(e) { moveGhost(e.clientX, e.clientY); highlightZone(e.clientX, e.clientY); }
+function onMouseUp(e) {
+  document.removeEventListener('mousemove', onMouseMove);
+  document.removeEventListener('mouseup', onMouseUp);
+  const zone = zoneAt(e.clientX, e.clientY);
+  killGhost();
+  document.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+  clearZones();
+  if (zone) doMove(zone.dataset.drop);
+  dragPid = null;
+}
+
+function startTouchDrag(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  dragPid = e.currentTarget.dataset.pid;
+  spawnGhost(t.clientX, t.clientY);
+  e.currentTarget.classList.add('is-dragging');
+  document.addEventListener('touchmove', onTouchMove, {passive:false});
+  document.addEventListener('touchend', onTouchEnd);
+}
+function onTouchMove(e) {
+  e.preventDefault();
+  const t = e.touches[0];
+  moveGhost(t.clientX, t.clientY - 30);
+  highlightZone(t.clientX, t.clientY);
+}
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  const t = e.changedTouches[0];
+  const zone = zoneAt(t.clientX, t.clientY);
+  killGhost();
+  document.querySelectorAll('.is-dragging').forEach(el => el.classList.remove('is-dragging'));
+  clearZones();
+  if (zone) doMove(zone.dataset.drop);
+  else if (dragPid) openMove(dragPid);
+  dragPid = null;
+}
+
+function spawnGhost(x, y) {
+  if (!dragPid) return;
+  const p = people[dragPid];
+  if (!p) return;
+  const c = gc(p.colorIdx);
+  ghostEl = document.createElement('div');
+  ghostEl.className = 'drag-ghost';
+  ghostEl.innerHTML = `<div class="member-avatar" style="background:${c.bg};color:${c.text};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:800;">${gi(p.name)}</div>${p.name}`;
+  ghostEl.style.left=(x-40)+'px'; ghostEl.style.top=(y-20)+'px';
+  document.body.appendChild(ghostEl);
+}
+function moveGhost(x, y) { if (ghostEl) { ghostEl.style.left=(x-40)+'px'; ghostEl.style.top=(y-20)+'px'; } }
+function killGhost() { if (ghostEl) { ghostEl.remove(); ghostEl=null; } }
+
+function zoneAt(x, y) {
+  for (const z of document.querySelectorAll('[data-drop]')) {
+    const r = z.getBoundingClientRect();
+    if (x>=r.left && x<=r.right && y>=r.top && y<=r.bottom) return z;
+  }
+  return null;
+}
+function highlightZone(x, y) { clearZones(); const z=zoneAt(x,y); if(z) activateDrop(z); }
+function activateDrop(zone) { zone.classList.add('drop-active'); zone.closest('.room-card')?.classList.add('drag-over'); }
+function deactivateDrop(zone) { zone.classList.remove('drop-active'); zone.closest('.room-card')?.classList.remove('drag-over'); }
+function clearZones() { document.querySelectorAll('.drop-active,.drag-over').forEach(el=>el.classList.remove('drop-active','drag-over')); }
+
+function doMove(dropKey) {
+  if (!dragPid) return;
+  const p = people[dragPid];
+  if (!p) return;
+  const newRoomId = (dropKey === 'null' || !dropKey) ? null : dropKey;
+  if (p.roomId === newRoomId) return;
+  setSyncing();
+  update(ref(db, `people/${dragPid}`), {roomId: newRoomId}).then(() => {
+    const dest = newRoomId ? rooms[newRoomId]?.name : '未割当';
+    showToast(`✅ ${p.name}を${dest}へ移動`);
+  });
+}
+
+// ============================================================
+// MOVE MODAL
+// ============================================================
+function openMove(pid) {
+  movingPersonId = pid;
+  const p = people[pid];
+  if (!p) return;
+  const c = gc(p.colorIdx);
+  document.getElementById('move-member-info').innerHTML = `
+    <div class="avatar-sm" style="background:${c.bg};color:${c.text}">${gi(p.name)}</div>
+    <div>
+      <div style="font-weight:800;font-size:0.98rem;">${p.name}</div>
+      <div style="font-size:0.73rem;color:var(--text2);margin-top:2px;">現在: ${p.roomId ? rooms[p.roomId]?.name??'不明' : '未割当'}</div>
+    </div>`;
+  let html = `<div class="room-option ${!p.roomId?'current':''}" onclick="movePersonTo(null)">
+    <span>⚠️ 未割当</span>${!p.roomId?'<span style="font-size:0.7rem;color:var(--accent)">現在地</span>':''}
+  </div>`;
+  roomsArr().forEach(r => {
+    const cur = p.roomId === r.key;
+    html += `<div class="room-option ${cur?'current':''}" onclick="movePersonTo('${r.key}')">
+      <span>${r.icon} ${r.name} <span style="font-size:0.7rem;color:var(--text2);font-weight:400;">(${gpr(r.key).length}人)</span></span>
+      ${cur ? '<span style="font-size:0.7rem;color:var(--accent)">現在地</span>' : '<span style="color:var(--text2);">→</span>'}
+    </div>`;
+  });
+  document.getElementById('room-select-list').innerHTML = html;
+  openModal('modal-move');
+}
+window.openMove = openMove;
+
+function movePersonTo(roomId) {
+  const p = people[movingPersonId];
+  if (!p) return;
+  closeModal('modal-move');
+  setSyncing();
+  update(ref(db, `people/${movingPersonId}`), {roomId: roomId}).then(() => {
+    const dest = roomId ? rooms[roomId]?.name : '未割当';
+    showToast(`✅ ${p.name}を${dest}へ移動`);
+  });
+}
+window.movePersonTo = movePersonTo;
+
+// ============================================================
+// ADD / DELETE
+// ============================================================
+window.openAddRoom = function() {
+  document.getElementById('new-room-name').value = '';
+  selIcon = '🎤'; renderIconPicker();
+  openModal('modal-add-room');
+};
+window.openAddPerson = function() {
+  document.getElementById('new-person-name').value = '';
+  selColor = 0; renderColorPicker();
+  updateRoomSelect();
+  openModal('modal-add-person');
+};
+window.addRoom = function() {
+  const name = document.getElementById('new-room-name').value.trim();
+  if (!name) { showToast('部屋名を入力してください'); return; }
+  setSyncing();
+  push(ref(db, 'rooms'), {name, icon: selIcon}).then(() => {
+    closeModal('modal-add-room');
+    showToast('✅ 部屋を追加しました');
+  });
+};
+window.addPerson = function() {
+  const name = document.getElementById('new-person-name').value.trim();
+  if (!name) { showToast('名前を入力してください'); return; }
+  const rv = document.getElementById('new-person-room').value;
+  setSyncing();
+  push(ref(db, 'people'), {name, roomId: rv || null, colorIdx: selColor}).then(() => {
+    closeModal('modal-add-person');
+    showToast('✅ メンバーを追加しました');
+  });
+};
+window.deleteRoom = function(key) {
+  if (!confirm('この部屋を削除しますか？\nメンバーは未割当になります。')) return;
+  setSyncing();
+  // Unassign people in this room
+  const updates = {};
+  peopleArr().forEach(p => { if (p.roomId === key) updates[`people/${p.key}/roomId`] = null; });
+  updates[`rooms/${key}`] = null;
+  update(ref(db), updates).then(() => showToast('🗑️ 部屋を削除しました'));
+};
+window.deletePerson = function(key) {
+  if (!confirm('このメンバーを削除しますか？')) return;
+  setSyncing();
+  remove(ref(db, `people/${key}`)).then(() => showToast('🗑️ メンバーを削除しました'));
+};
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function setSyncing() {
+  const badge = document.getElementById('sync-badge');
+  const label = document.getElementById('sync-label');
+  badge.className = 'sync-badge syncing';
+  label.textContent = '同期中...';
+}
+
+window.showTab = function(t) {
+  ['rooms','people'].forEach((name,i) => {
+    document.querySelectorAll('.tab')[i].classList.toggle('active', name===t);
+    document.getElementById('page-'+name).classList.toggle('active', name===t);
+    document.getElementById('nav-'+name).classList.toggle('active', name===t);
+  });
+};
+window.openModal = function(id) { document.getElementById(id).classList.add('active'); };
+window.closeModal = function(id) { document.getElementById(id).classList.remove('active'); };
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target===o) window.closeModal(o.id); });
+});
+
+window.showToast = function(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+};
+
+function renderColorPicker() {
+  document.getElementById('color-picker').innerHTML = COLORS.map((c,i)=>
+    `<div class="color-dot${i===selColor?' selected':''}" style="background:${c.bg}" onclick="pickColor(${i})"></div>`).join('');
+}
+window.pickColor = function(i) {
+  selColor=i;
+  document.querySelectorAll('#color-picker .color-dot').forEach((d,j)=>d.classList.toggle('selected',j===i));
+};
+function renderIconPicker() {
+  document.getElementById('icon-picker').innerHTML = ICONS.map(ic=>
+    `<div class="icon-dot${ic===selIcon?' selected':''}" onclick="pickIcon('${ic}')">${ic}</div>`).join('');
+}
+window.pickIcon = function(ic) {
+  selIcon=ic;
+  document.querySelectorAll('#icon-picker .icon-dot').forEach(d=>d.classList.toggle('selected',d.textContent===ic));
+};
+
+document.getElementById('new-room-name').addEventListener('keydown', e=>{ if(e.key==='Enter') window.addRoom(); });
+document.getElementById('new-person-name').addEventListener('keydown', e=>{ if(e.key==='Enter') window.addPerson(); });
+
+// Init pickers
+renderColorPicker();
+renderIconPicker();
+</script>
+</body>
+</html>
